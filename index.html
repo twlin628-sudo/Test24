@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="大富翁">
+<meta name="theme-color" content="#0b2c22">
+<title>大富翁 · 台灣版</title>
+<style>
+  :root{ --bg:#0e3b2e; --panel:#11352a; --gold:#f4c430; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  body{ margin:0; min-height:100dvh; overscroll-behavior:none;
+        font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+        background:linear-gradient(160deg,#0b2c22,#06140f); color:#eee; }
+  #app{ display:flex; flex-wrap:wrap; gap:14px; padding:12px; align-items:flex-start; justify-content:center;
+        padding-top:max(12px,env(safe-area-inset-top));
+        padding-left:max(12px,env(safe-area-inset-left));
+        padding-right:max(12px,env(safe-area-inset-right)); }
+  .btn:active:not(:disabled), .mini:active:not(:disabled){ transform:scale(.95); }
+
+  /* ---- 棋盤 ---- */
+  #board{ width:min(95vw,86dvh); aspect-ratio:1/1; display:grid;
+          grid-template:repeat(11,1fr)/repeat(11,1fr); gap:2px;
+          background:#16513e; padding:2px; border-radius:8px; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  #center{ grid-area:2/2/11/11; background:radial-gradient(circle at 50% 40%,#1c5f48,#0d3527);
+           display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+           border-radius:6px; transform:rotate(0deg); }
+  .logo{ font-size:clamp(20px,5vmin,46px); font-weight:900; color:var(--gold); text-align:center;
+         text-shadow:2px 2px 0 #000; letter-spacing:2px; line-height:1.05; }
+  .logo small{ font-size:.4em; color:#cfe; letter-spacing:6px; }
+  #dice{ font-size:clamp(30px,8vmin,64px); line-height:1; filter:drop-shadow(0 2px 4px #000); }
+  .turn-line{ font-size:clamp(12px,2.4vmin,20px); }
+  #turn-name{ font-weight:900; }
+
+  .cell{ position:relative; background:#f3f1e7; color:#1a1a1a; border-radius:3px; overflow:hidden;
+         display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+         padding:2px 1px; min-width:0; }
+  .cell .strip{ width:100%; height:22%; min-height:7px; flex:none; border-radius:2px 2px 0 0; }
+  .cname{ font-size:clamp(5px,1.05vmin,10px); font-weight:700; text-align:center; line-height:1.05;
+          margin-top:1px; word-break:break-all; }
+  .price{ font-size:clamp(5px,.95vmin,9px); color:#555; margin-top:auto; }
+  .houses{ font-size:clamp(6px,1.1vmin,11px); line-height:1; position:absolute; top:23%; left:0; right:0; text-align:center; }
+  .owner{ position:absolute; bottom:0; left:0; right:0; height:5px; display:none; }
+  .tokens{ position:absolute; inset:auto 0 6px 0; display:flex; flex-wrap:wrap; gap:1px; justify-content:center; align-items:flex-end; min-height:10px; }
+  .token{ width:clamp(7px,1.5vmin,13px); height:clamp(7px,1.5vmin,13px); border-radius:50%;
+          border:1.5px solid #fff; box-shadow:0 1px 2px rgba(0,0,0,.6); }
+  .cell.mortgaged{ background:repeating-linear-gradient(45deg,#e7e2d2,#e7e2d2 5px,#d4cdb6 5px,#d4cdb6 10px); opacity:.85; }
+  .cell.active-cell{ outline:3px solid var(--gold); outline-offset:-3px; }
+
+  /* ---- 右側面板 ---- */
+  #panel{ width:min(95vw,360px); display:flex; flex-direction:column; gap:10px; }
+  .card{ background:var(--panel); border:1px solid #1f5a45; border-radius:10px; padding:12px; }
+  .btns{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn{ font:inherit; font-weight:700; padding:11px 8px; border-radius:8px; border:none; cursor:pointer;
+        background:#214d3e; color:#eafff5; transition:.12s; }
+  .btn:hover:not(:disabled){ filter:brightness(1.18); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn.primary{ background:var(--gold); color:#3a2a00; }
+  .btn.danger{ background:#b3322b; color:#fff; }
+  .btn.big{ grid-column:1/3; font-size:18px; padding:14px; }
+
+  .players{ display:flex; flex-direction:column; gap:6px; }
+  .prow{ display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:8px; background:#0e2b22; }
+  .prow.active{ box-shadow:0 0 0 2px var(--gold) inset; }
+  .prow.dead{ opacity:.45; text-decoration:line-through; }
+  .dot{ width:16px; height:16px; border-radius:50%; border:2px solid #fff; flex:none; }
+  .pname{ font-weight:800; flex:1; }
+  .pmoney{ font-variant-numeric:tabular-nums; font-weight:700; color:var(--gold); }
+  .ptag{ font-size:11px; background:#333; padding:1px 6px; border-radius:6px; }
+
+  #log{ height:150px; overflow-y:auto; font-size:13px; line-height:1.5; display:flex; flex-direction:column; }
+  #log div{ padding:2px 0; border-bottom:1px dotted #1f5a45; }
+
+  /* ---- 對話框 ---- */
+  #overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:none;
+            align-items:center; justify-content:center; z-index:50;
+            padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom)); }
+  #dialog{ background:#15392d; border:1px solid #2c6b53; border-radius:14px; padding:20px;
+           width:min(96vw,460px); max-height:88dvh; overflow-y:auto; box-shadow:0 10px 40px #000;
+           -webkit-overflow-scrolling:touch; }
+  .dlg-btns .btn{ min-height:46px; }
+  #dialog h3{ margin:0 0 12px; }
+  #dialog p{ margin:6px 0; line-height:1.5; }
+  .dlg-btns{ display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  .dlg-btns .btn{ flex:1; min-width:120px; }
+  .asset-list,.trade-cols label{ display:block; }
+  .asset-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:6px 0; border-bottom:1px solid #1f5a45; font-size:14px; }
+  .swatch{ width:14px; height:14px; border-radius:3px; flex:none; }
+  .asset-actions{ margin-left:auto; display:flex; gap:5px; flex-wrap:wrap; }
+  .mini{ font:inherit; font-size:13px; padding:9px 11px; min-height:38px; border-radius:7px; border:none; cursor:pointer; background:#3a8f6f; color:#04150e; font-weight:700; }
+  .mini:disabled{ opacity:.4; cursor:not-allowed; }
+  .trade-cols{ display:flex; gap:14px; }
+  .trade-cols>div{ flex:1; }
+  .trade-cols label{ font-size:13px; margin:4px 0; }
+
+  /* ---- 遊戲內提示 toast ---- */
+  #toast{ position:fixed; left:50%; top:18%; transform:translate(-50%,-8px); z-index:100;
+          background:#b3322b; color:#fff; font-weight:700; padding:12px 20px; border-radius:10px;
+          box-shadow:0 6px 24px rgba(0,0,0,.5); max-width:88vw; text-align:center;
+          opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
+  #toast.show{ opacity:1; transform:translate(-50%,0); pointer-events:none; }
+
+  /* ---- 開始畫面 ---- */
+  #setup{ position:fixed; inset:0; background:linear-gradient(160deg,#0b2c22,#06140f); z-index:80;
+          display:flex; align-items:center; justify-content:center; padding:16px; }
+  #setup .box{ background:var(--panel); border:1px solid #2c6b53; border-radius:16px; padding:26px; width:min(96vw,420px); }
+  #setup h1{ text-align:center; color:var(--gold); margin:0 0 4px; font-size:34px; }
+  #setup .sub{ text-align:center; color:#bdd; margin:0 0 18px; }
+  .count-row{ display:flex; gap:8px; margin:10px 0 16px; }
+  .count-row button{ flex:1; }
+  .count-row button.sel{ outline:3px solid var(--gold); }
+  .pinput{ display:flex; align-items:center; gap:8px; margin:8px 0; }
+  .pinput input{ flex:1; padding:9px; border-radius:7px; border:1px solid #2c6b53; background:#0e2b22; color:#fff; font:inherit; }
+
+  /* ---- 橫放提示(僅直向手機顯示) ---- */
+  #rotate-hint{ display:none; }
+  @media(max-width:760px) and (orientation:portrait){
+    #rotate-hint{ display:block; position:fixed; top:env(safe-area-inset-top); left:0; right:0;
+      text-align:center; font-size:13px; padding:5px; color:#06140f; background:var(--gold);
+      z-index:60; pointer-events:none; opacity:.95; }
+  }
+
+  /* ---- 手機版面 ---- */
+  @media(max-width:560px){
+    #panel{ width:96vw; }
+    #app{ gap:10px; padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+    /* 操作按鈕固定在底部,拇指好按 */
+    #controls{ position:fixed; left:0; right:0; bottom:0; z-index:45; border-radius:14px 14px 0 0;
+      padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+      box-shadow:0 -6px 24px rgba(0,0,0,.5); }
+    #controls .btn{ padding:13px 8px; min-height:50px; font-size:15px; }
+    #controls .btn.big{ font-size:17px; }
+    /* 棋盤格地名在小螢幕略放大,長地名自動縮 */
+    .cname{ font-size:clamp(6px,1.7vmin,11px); }
+    .price{ font-size:clamp(5px,1.4vmin,9px); }
+    .token{ width:clamp(8px,2.2vmin,13px); height:clamp(8px,2.2vmin,13px); }
+  }
+  /* 橫放手機:棋盤與面板並排,棋盤吃滿高度 */
+  @media(max-height:520px) and (orientation:landscape){
+    #board{ width:min(92dvh,60vw); }
+    #panel{ width:min(38vw,360px); }
+    #log{ height:90px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="rotate-hint">📱 建議橫放手機,畫面更舒適</div>
+
+<div id="app">
+  <div id="board"></div>
+  <div id="panel">
+    <div class="card" id="controls">
+      <div class="btns">
+        <button class="btn primary big" id="btn-roll" onclick="rollClicked()">🗣 口說擲骰</button>
+        <button class="btn" id="btn-manage" onclick="openManage()">🏦 管理資產</button>
+        <button class="btn" id="btn-trade" onclick="tradeUI()">🤝 交易</button>
+        <button class="btn big" id="btn-end" onclick="endTurn()">結束回合 ➜</button>
+      </div>
+    </div>
+    <div class="card"><div class="players" id="players"></div></div>
+    <div class="card"><div id="log"></div></div>
+  </div>
+</div>
+
+<div id="overlay"><div id="dialog"></div></div>
+<div id="toast"></div>
+
+<div id="setup">
+  <div class="box">
+    <h1>大富翁</h1>
+    <p class="sub">台灣在地版 · 同機多人輪流</p>
+    <div>玩家人數</div>
+    <div class="count-row" id="count-row">
+      <button class="btn" data-n="2">2 人</button>
+      <button class="btn sel" data-n="3">3 人</button>
+      <button class="btn" data-n="4">4 人</button>
+    </div>
+    <div id="pinputs"></div>
+    <button class="btn primary big" style="width:100%;margin-top:14px" onclick="beginGame()">開始遊戲</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ 棋盤資料(40 格) ============ */
+const COLORS={ brown:'#7a4a25',lightblue:'#9bd3f0',pink:'#d63a8f',orange:'#f28c1d',
+               red:'#e23b2e',yellow:'#f5d011',green:'#239a52',darkblue:'#1167b1' };
+const BOARD=[
+ {t:'go',name:'起點'},
+ {t:'prop',name:'屏東',price:60,color:'brown',rent:[2,10,30,90,160,250],house:50},
+ {t:'chest',name:'命運'},
+ {t:'prop',name:'台東',price:60,color:'brown',rent:[4,20,60,180,320,450],house:50},
+ {t:'tax',name:'所得稅',amount:200},
+ {t:'rail',name:'台北車站',price:200},
+ {t:'prop',name:'嘉義',price:100,color:'lightblue',rent:[6,30,90,270,400,550],house:50},
+ {t:'chance',name:'機會'},
+ {t:'prop',name:'雲林',price:100,color:'lightblue',rent:[6,30,90,270,400,550],house:50},
+ {t:'prop',name:'南投',price:120,color:'lightblue',rent:[8,40,100,300,450,600],house:50},
+ {t:'jail',name:'監獄/探監'},
+ {t:'prop',name:'苗栗',price:140,color:'pink',rent:[10,50,150,450,625,750],house:100},
+ {t:'util',name:'台電公司',price:150},
+ {t:'prop',name:'新竹',price:140,color:'pink',rent:[10,50,150,450,625,750],house:100},
+ {t:'prop',name:'彰化',price:160,color:'pink',rent:[12,60,180,500,700,900],house:100},
+ {t:'rail',name:'台中車站',price:200},
+ {t:'prop',name:'基隆',price:180,color:'orange',rent:[14,70,200,550,750,950],house:100},
+ {t:'chest',name:'命運'},
+ {t:'prop',name:'宜蘭',price:180,color:'orange',rent:[14,70,200,550,750,950],house:100},
+ {t:'prop',name:'桃園',price:200,color:'orange',rent:[16,80,220,600,800,1000],house:100},
+ {t:'parking',name:'免費停車'},
+ {t:'prop',name:'台南',price:220,color:'red',rent:[18,90,250,700,875,1050],house:150},
+ {t:'chance',name:'機會'},
+ {t:'prop',name:'高雄',price:220,color:'red',rent:[18,90,250,700,875,1050],house:150},
+ {t:'prop',name:'台中市',price:240,color:'red',rent:[20,100,300,750,925,1100],house:150},
+ {t:'rail',name:'高雄車站',price:200},
+ {t:'prop',name:'板橋',price:260,color:'yellow',rent:[22,110,330,800,975,1150],house:150},
+ {t:'prop',name:'三重',price:260,color:'yellow',rent:[22,110,330,800,975,1150],house:150},
+ {t:'util',name:'自來水公司',price:150},
+ {t:'prop',name:'中和',price:280,color:'yellow',rent:[24,120,360,850,1025,1200],house:150},
+ {t:'gotojail',name:'入獄'},
+ {t:'prop',name:'西門町',price:300,color:'green',rent:[26,130,390,900,1100,1275],house:200},
+ {t:'prop',name:'公館',price:300,color:'green',rent:[26,130,390,900,1100,1275],house:200},
+ {t:'chest',name:'命運'},
+ {t:'prop',name:'士林',price:320,color:'green',rent:[28,150,450,1000,1200,1400],house:200},
+ {t:'rail',name:'花蓮車站',price:200},
+ {t:'chance',name:'機會'},
+ {t:'prop',name:'台北東區',price:350,color:'darkblue',rent:[35,175,500,1100,1300,1500],house:200},
+ {t:'tax',name:'奢侈稅',amount:100},
+ {t:'prop',name:'信義101',price:400,color:'darkblue',rent:[50,200,600,1400,1700,2000],house:200},
+];
+
+/* ============ 卡片 ============ */
+const CHANCE=[
+ {text:'前進到「起點」,領取 $200。',moveTo:0},
+ {text:'前進到台北車站,若經過起點可領 $200。',moveTo:5},
+ {text:'豪華一日遊,前進到信義101。',moveTo:39},
+ {text:'前進到台中市,若經過起點可領 $200。',moveTo:24},
+ {text:'銀行發放股利,收 $50。',money:50},
+ {text:'獲得一張「出獄許可證」,可保留待用。',getOut:true},
+ {text:'時運不濟,後退三格。',move:-3},
+ {text:'違規駕駛,直接入獄,不得經過起點。',jail:true},
+ {text:'房屋整修:每棟房子付 $25,每間旅館付 $100。',perHouse:[25,100]},
+ {text:'闖紅燈罰款 $15。',money:-15},
+ {text:'前進到最近的車站,並付給擁有者雙倍租金。',nearestRail:true},
+ {text:'當選董事長,付給每位玩家 $50。',eachPay:50},
+];
+const CHEST=[
+ {text:'前進到「起點」,領取 $200。',moveTo:0},
+ {text:'銀行作業疏失對你有利,收 $200。',money:200},
+ {text:'支付醫藥費 $50。',money:-50},
+ {text:'退稅,收 $20。',money:20},
+ {text:'獲得一張「出獄許可證」,可保留待用。',getOut:true},
+ {text:'觸犯規定,直接入獄,不得經過起點。',jail:true},
+ {text:'你的生日,每位玩家送你 $10。',eachCollect:10},
+ {text:'人壽保險到期,收 $100。',money:100},
+ {text:'繳交學費 $50。',money:-50},
+ {text:'贏得選美比賽二獎,收 $10。',money:10},
+ {text:'房屋修繕:每棟房子付 $40,每間旅館付 $115。',perHouse:[40,115]},
+ {text:'領取年終獎金,收 $100。',money:100},
+];
+
+/* ============ 狀態 ============ */
+const TOKEN_COLORS=['#e6194b','#3cb44b','#4363d8','#f58231'];
+let players=[], cur=0, busy=false, gameOver=false;
+let houseBank=32, hotelBank=12;
+let chanceDeck=[], chestDeck=[];
+let phaseRoll=true, phaseEnd=false;
+const FACES=['','⚀','⚁','⚂','⚃','⚄','⚅'];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const rnd=()=>Math.floor(Math.random()*6)+1;
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/* ============ 口說擲骰:設定與 AI/語音 ============ */
+const QUIZ_BASE="https://spring-art-db47.twlin628.workers.dev";
+const QUIZ_MODEL="gemma4:e4b";
+const LEVELS=["國小","國中","高中","大學","GRE","口語"];
+let quizLevel="高中";
+let activeRec=null;
+const LEVEL_VOCAB={
+  "國小":"約500字（教育部基本1200字前段），如 library, weather, careful, harvest, polite",
+  "國中":"約1200字（教育部基本1200字），如 encourage, consider, qualify, symptom, negotiate",
+  "高中":"約7000字（大考中心高中英文參考詞彙表），如 ambiguous, inevitable, perceive, meticulous, lucid",
+  "大學":"CEFR B2-C1 / 學術詞彙AWL，如 paradigm, articulate, inherent, juxtapose, exacerbate",
+  "GRE":"C1-C2 低頻難詞，如 ambivalent, loquacious, recalcitrant, tendentious, abstruse",
+  "口語":"常用口語表達/片語動詞，如 hang out, figure out, on the fence, bite the bullet",
+};
+function escapeHtml(s){
+  return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+async function callAI(prompt){
+  const res=await fetch(QUIZ_BASE+"/api/chat/completions",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:QUIZ_MODEL,messages:[{role:"user",content:prompt}],stream:false}),
+  });
+  if(!res.ok){ const t=await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0,80)}`); }
+  const data=await res.json();
+  return data.choices?.[0]?.message?.content??"";
+}
+function parseObject(raw){ const m=raw.match(/\{[\s\S]*\}/); if(!m) throw new Error("AI 回應格式錯誤"); return JSON.parse(m[0]); }
+function parseArray(raw){ const m=raw.match(/\[[\s\S]*\]/); if(!m) throw new Error("AI 回應格式錯誤"); return JSON.parse(m[0]); }
+function recognizeOnce(lang){
+  return new Promise((resolve,reject)=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ reject(new Error("此瀏覽器不支援語音辨識,請改用 Chrome/Edge")); return; }
+    const rec=new SR(); rec.lang=lang; rec.interimResults=false; rec.maxAlternatives=1; rec.continuous=false;
+    let got="",fatal=null;
+    rec.onresult=e=>{ got=e.results[0][0].transcript||""; };
+    rec.onerror=e=>{
+      if(e.error==="no-speech"||e.error==="aborted") return;
+      if(e.error==="not-allowed"||e.error==="service-not-allowed") fatal="麥克風權限被拒絕";
+      else if(e.error==="audio-capture") fatal="找不到麥克風裝置";
+      else fatal="辨識錯誤:"+e.error;
+    };
+    rec.onend=()=>{ if(activeRec===rec) activeRec=null; if(rec._aborted){ reject(new Error("__aborted__")); return; } fatal?reject(new Error(fatal)):resolve(got.trim()); };
+    activeRec=rec;
+    try{ rec.start(); }catch(err){ activeRec=null; reject(new Error("無法啟動麥克風:"+err.message)); }
+  });
+}
+function buildGenPrompt(lv){
+  const seed=Math.floor(Math.random()*99991)+10;
+  return `你是英文單字老師。請依等級產生「6 個不同」的英文單字,難度需符合該等級,並涵蓋不同難度(避免全是最高頻字)。
+
+【等級】${lv}
+【詞彙庫參考】${LEVEL_VOCAB[lv]}
+【隨機種子】${seed}(用此數字增加選字隨機性,每次結果應不同,6 個字彼此不可重複)
+
+請嚴格只輸出以下 JSON 陣列,不可有任何其他文字或說明:
+[
+  { "word": "英文單字", "phonetic": "KK音標", "pos": "詞性", "zh_meaning": "中文意思(2-6字)" }
+]
+陣列必須剛好 6 個元素。`;
+}
+async function judgeWord(target,enText,zhText){
+  const prompt=`使用者正在玩英文單字口說遊戲。目標單字是「${target.word}」(中文意思:${target.zh_meaning||""})。
+規則:使用者要先念該英文單字、再念它的中文翻譯,兩者都正確才算答對。
+
+使用者透過語音辨識念出來的內容(辨識可能有誤差/音譯,請寬鬆比對發音):
+- 英文部分辨識結果:「${enText||"(無)"}」
+- 中文部分辨識結果:「${zhText||"(無)"}」
+
+判定原則:
+1. 英文部分發音與「${target.word}」相近即算對(en_ok=true)。
+2. 中文部分只要與「${target.zh_meaning||""}」詞意相同或為近義即算對(zh_ok=true),用字不必完全一樣;反義或無關則算錯。
+3. en_ok 與 zh_ok 皆為 true 才算整體答對。
+
+請嚴格只輸出以下 JSON,不可有其他文字:
+{
+  "en_ok": true 或 false,
+  "zh_ok": true 或 false,
+  "reason": "簡短判定理由(繁體中文,一句)"
+}`;
+  return parseObject(await callAI(prompt));
+}
+
+/* 回傳前進步數;0=未答對/取消 */
+function speakRoll(player,inJail){
+  return new Promise(resolve=>{
+    const ov=document.getElementById('overlay'), box=document.getElementById('dialog');
+    let words=[], recing=false;
+    function close(val){ ov.style.display='none'; resolve(val); }
+    function renderLevel(){
+      let h=`<h3>🗣 ${player.name} ${inJail?'的出獄挑戰':'的口說擲骰'}</h3>
+        <p>選擇單字等級,AI 會出 6 個單字(分別代表前進 1~6 步)。</p>
+        <div class="count-row" style="flex-wrap:wrap;gap:6px">`;
+      LEVELS.forEach(l=>{ h+=`<button class="btn${l===quizLevel?' sel':''}" data-lv="${l}" style="flex:0 0 auto;min-width:62px">${l}</button>`; });
+      h+=`</div><div class="dlg-btns"><button class="btn primary" id="q-gen">出題 →</button><button class="btn" id="q-x">取消</button></div>`;
+      box.innerHTML=h;
+      box.querySelectorAll('button[data-lv]').forEach(b=>b.onclick=()=>{ quizLevel=b.dataset.lv; renderLevel(); });
+      box.querySelector('#q-x').onclick=()=>close(-1);
+      box.querySelector('#q-gen').onclick=genAndPick;
+      ov.style.display='flex';
+    }
+    async function genAndPick(){
+      box.innerHTML=`<h3>🗣 出題中…</h3><p>AI 正在產生 6 個單字,請稍候。</p>`;
+      try{
+        const arr=parseArray(await callAI(buildGenPrompt(quizLevel)));
+        words=(arr||[]).slice(0,6).filter(w=>w&&w.word);
+        if(words.length<6) throw new Error("單字數量不足,請重試");
+        renderPick();
+      }catch(e){
+        box.innerHTML=`<h3>⚠ 出題失敗</h3><p>${escapeHtml(e.message||'請再試一次')}</p>
+          <div class="dlg-btns"><button class="btn primary" id="q-retry">重試</button><button class="btn" id="q-giveup">放棄本回合</button></div>`;
+        box.querySelector('#q-retry').onclick=renderLevel;
+        box.querySelector('#q-giveup').onclick=()=>close(0);
+      }
+    }
+    function renderPick(){
+      let h=`<h3>🗣 ${inJail?'答對即可出獄並前進':'選一題作答'}(等級:${quizLevel})</h3>
+        <p style="font-size:13px;color:#acc">點任一題:先念<b>英文</b>、再念<b>中文翻譯</b>。答對前進該步數,答錯${inJail?'留在獄中':'原地不動'}。</p>
+        <div class="asset-list">`;
+      words.forEach((w,i)=>{
+        h+=`<div class="asset-row"><b style="color:var(--gold);min-width:62px">前進 ${i+1} 步</b>
+          <span>${escapeHtml(w.word)} <span style="color:#9cc;font-size:12px">${escapeHtml(w.phonetic||'')} ${escapeHtml(w.pos||'')}</span></span>
+          <span class="asset-actions"><button class="mini" data-i="${i}">選這題 🎤</button></span></div>`;
+      });
+      h+=`</div><div id="q-status" style="min-height:1.3em;margin-top:8px;font-weight:700"></div>
+        <div class="dlg-btns"><button class="btn" id="q-giveup2">放棄本回合</button></div>`;
+      box.innerHTML=h;
+      box.querySelectorAll('button.mini').forEach(b=>b.onclick=()=>doQuiz(+b.dataset.i));
+      box.querySelector('#q-giveup2').onclick=()=>{ if(!recing) close(0); };
+    }
+    async function doQuiz(i){
+      if(recing) return;
+      recing=true;
+      const w=words[i], st=document.getElementById('q-status');
+      box.querySelectorAll('button.mini').forEach(b=>b.disabled=true);
+      let enText="",zhText="";
+      try{
+        st.textContent='🎤 第 1/2 段:請念出英文單字…';
+        enText=await recognizeOnce('en-US');
+        st.textContent='✅ 已收到英文,準備念中文…';
+        await sleep(700);
+        st.textContent='🎤 第 2/2 段:請念出中文翻譯…';
+        zhText=await recognizeOnce('zh-TW');
+        if(!enText&&!zhText) throw new Error("沒有偵測到語音");
+        st.textContent='🤖 AI 判定中…';
+        const r=await judgeWord(w,enText,zhText);
+        renderResult(i,w,r,!!(r&&r.en_ok&&r.zh_ok),enText,zhText);
+      }catch(e){
+        recing=false;
+        if(e.message==='__aborted__'){ renderPick(); return; }
+        st.textContent='⚠ '+(e.message||'辨識錯誤');
+        box.querySelectorAll('button.mini').forEach(b=>b.disabled=false);
+      }
+    }
+    function renderResult(i,w,r,ok,enText,zhText){
+      const steps=i+1;
+      let h=`<h3>${ok?'✓ 答對了!':'✗ 答錯'}</h3>
+        <p><b>${escapeHtml(w.word)}</b> ${escapeHtml(w.phonetic||'')} — ${escapeHtml(w.zh_meaning||'')}</p>
+        <p>英文 ${r&&r.en_ok?'✓':'✗'}　中文 ${r&&r.zh_ok?'✓':'✗'}</p>
+        ${r&&r.reason?`<p style="color:#acc;font-size:13px">${escapeHtml(r.reason)}</p>`:''}
+        <p style="font-size:12px;color:#9cc">聽到的英文:${escapeHtml(enText)||'(無)'}　中文:${escapeHtml(zhText)||'(無)'}</p>
+        <p style="color:var(--gold);font-weight:700">${ok?(inJail?'出獄並前進':'前進')+' '+steps+' 步!':(inJail?'留在獄中,等下一輪。':'原地不動,回合結束。')}</p>`;
+      box.innerHTML=h+`<div class="dlg-btns"><button class="btn primary" id="q-ok">確定</button></div>`;
+      box.querySelector('#q-ok').onclick=()=>close(ok?steps:0);
+    }
+    renderLevel();
+  });
+}
+
+/* ============ 開始畫面 ============ */
+let setupCount=3;
+function renderSetupInputs(){
+  const wrap=document.getElementById('pinputs'); wrap.innerHTML='';
+  for(let i=0;i<setupCount;i++){
+    const d=document.createElement('div'); d.className='pinput';
+    d.innerHTML=`<span class="dot" style="background:${TOKEN_COLORS[i]}"></span>
+      <input id="pname${i}" maxlength="6" value="玩家${i+1}">`;
+    wrap.appendChild(d);
+  }
+}
+document.getElementById('count-row').addEventListener('click',e=>{
+  if(e.target.dataset.n){
+    setupCount=+e.target.dataset.n;
+    document.querySelectorAll('#count-row button').forEach(b=>b.classList.toggle('sel',b===e.target));
+    renderSetupInputs();
+  }
+});
+renderSetupInputs();
+
+function beginGame(){
+  players=[];
+  for(let i=0;i<setupCount;i++){
+    const nm=(document.getElementById('pname'+i).value||('玩家'+(i+1))).trim();
+    players.push({name:nm,color:TOKEN_COLORS[i],money:1500,pos:0,inJail:false,jailTurns:0,getOut:0,bankrupt:false});
+  }
+  BOARD.forEach(s=>{ if(s.t==='prop'||s.t==='rail'||s.t==='util'){ s.owner=null; s.houses=0; s.mortgaged=false; } });
+  houseBank=32; hotelBank=12; cur=0; gameOver=false;
+  chanceDeck=shuffle([...Array(CHANCE.length).keys()]);
+  chestDeck=shuffle([...Array(CHEST.length).keys()]);
+  document.getElementById('setup').style.display='none';
+  buildBoard(); updateAll();
+  log('🎮 遊戲開始!每位玩家擁有 $1500。');
+  startTurn();
+}
+
+/* ============ 棋盤渲染 ============ */
+function gridPos(i){
+  if(i<=10) return {r:11,c:11-i};
+  if(i<=20) return {r:21-i,c:1};
+  if(i<=30) return {r:1,c:i-19};
+  return {r:i-29,c:11};
+}
+function iconOf(s){
+  switch(s.t){ case 'rail':return '🚉'; case 'util':return s.name.includes('電')?'💡':'🚰';
+    case 'chance':return '❓'; case 'chest':return '🎁'; case 'go':return '🟢';
+    case 'jail':return '🔒'; case 'parking':return '🅿️'; case 'gotojail':return '👮'; case 'tax':return '💰'; }
+  return '';
+}
+function buildBoard(){
+  const b=document.getElementById('board'); b.innerHTML='';
+  const c=document.createElement('div'); c.id='center';
+  c.innerHTML='<div class="logo">大富翁<br><small>台灣版</small></div><div id="dice">🎲</div><div class="turn-line">輪到:<span id="turn-name">—</span></div>';
+  b.appendChild(c);
+  BOARD.forEach((s,i)=>{
+    const g=gridPos(i); const cell=document.createElement('div');
+    cell.id='cell-'+i; cell.className='cell'; cell.style.gridRow=g.r; cell.style.gridColumn=g.c;
+    let strip = s.t==='prop' ? `<div class="strip" style="background:${COLORS[s.color]}"></div>` : '';
+    let sub='';
+    if(s.t==='prop'||s.t==='rail'||s.t==='util') sub=`<div class="price">$${s.price}</div>`;
+    else if(s.t==='tax') sub=`<div class="price">$${s.amount}</div>`;
+    cell.innerHTML=strip+`<div class="cname">${iconOf(s)} ${s.name}</div>${sub}`+
+      `<div class="houses"></div><div class="owner"></div><div class="tokens"></div>`;
+    b.appendChild(cell);
+  });
+}
+
+/* ============ 畫面更新 ============ */
+function updateAll(){
+  BOARD.forEach((s,i)=>{
+    const cell=document.getElementById('cell-'+i); if(!cell) return;
+    const own=cell.querySelector('.owner');
+    if(s.owner!=null){ own.style.display='block'; own.style.background=players[s.owner].color; }
+    else own.style.display='none';
+    const h=cell.querySelector('.houses');
+    h.textContent = (s.t==='prop'&&s.houses>0) ? (s.houses>=5?'🏨':'🏠'.repeat(s.houses)) : '';
+    cell.classList.toggle('mortgaged',!!s.mortgaged);
+  });
+  renderPlayers(); renderTokens();
+}
+function renderTokens(){
+  document.querySelectorAll('.tokens').forEach(t=>t.innerHTML='');
+  players.forEach(p=>{
+    if(p.bankrupt) return;
+    const cell=document.getElementById('cell-'+p.pos); if(!cell) return;
+    const d=document.createElement('div'); d.className='token'; d.style.background=p.color; d.title=p.name;
+    cell.querySelector('.tokens').appendChild(d);
+  });
+}
+function renderPlayers(){
+  const wrap=document.getElementById('players'); wrap.innerHTML='';
+  players.forEach((p,i)=>{
+    const cnt=BOARD.filter(s=>s.owner===i).length;
+    const row=document.createElement('div');
+    row.className='prow'+(i===cur?' active':'')+(p.bankrupt?' dead':'');
+    row.innerHTML=`<span class="dot" style="background:${p.color}"></span>
+      <span class="pname">${p.name}</span>
+      ${p.inJail?'<span class="ptag">獄中</span>':''}
+      ${p.getOut>0?'<span class="ptag">出獄卡×'+p.getOut+'</span>':''}
+      <span class="ptag">地產 ${cnt}</span>
+      <span class="pmoney">$${p.money}</span>`;
+    wrap.appendChild(row);
+  });
+}
+function highlightCurrent(){
+  document.querySelectorAll('.active-cell').forEach(c=>c.classList.remove('active-cell'));
+}
+function log(msg){
+  const l=document.getElementById('log');
+  const d=document.createElement('div'); d.innerHTML=msg; l.prepend(d);
+}
+function showDie(n){ const el=document.getElementById('dice'); if(el) el.textContent=FACES[n]||'🎲'; }
+let toastTimer=null;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1900);
+}
+
+/* ============ 對話框 ============ */
+function dialog(html,buttons){
+  return new Promise(resolve=>{
+    const ov=document.getElementById('overlay'), box=document.getElementById('dialog');
+    box.innerHTML=html+'<div class="dlg-btns"></div>';
+    const bd=box.querySelector('.dlg-btns');
+    buttons.forEach(b=>{
+      const el=document.createElement('button');
+      el.textContent=b.label; el.className='btn '+(b.class||'');
+      if(b.disabled) el.disabled=true;
+      el.onclick=()=>{ ov.style.display='none'; resolve(b.value); };
+      bd.appendChild(el);
+    });
+    ov.style.display='flex';
+  });
+}
+
+/* ============ 回合流程 ============ */
+function refreshButtons(){
+  document.getElementById('btn-roll').disabled = busy||gameOver||!phaseRoll;
+  document.getElementById('btn-end').disabled  = busy||gameOver||!phaseEnd;
+  document.getElementById('btn-manage').disabled = busy||gameOver;
+  document.getElementById('btn-trade').disabled  = busy||gameOver;
+}
+function startTurn(){
+  phaseRoll=true; phaseEnd=false;
+  const p=players[cur];
+  const tn=document.getElementById('turn-name');
+  if(tn){ tn.textContent=p.name; tn.style.color=p.color; }
+  log(`—— 輪到 <b style="color:${p.color}">${p.name}</b> ——${p.inJail?'(獄中)':''}`);
+  renderPlayers(); refreshButtons();
+}
+function nextTurn(){
+  let n=cur, guard=0;
+  do{ n=(n+1)%players.length; guard++; } while(players[n].bankrupt && guard<10);
+  cur=n; startTurn();
+}
+async function rollClicked(){
+  if(busy||gameOver||!phaseRoll) return;
+  busy=true; refreshButtons();
+  const p=players[cur];
+  if(p.inJail) await jailTurn(); else await speakMove();
+  busy=false; refreshButtons();
+}
+function endTurn(){ if(busy||gameOver||!phaseEnd) return; nextTurn(); }
+
+async function speakMove(){
+  const p=players[cur];
+  const steps=await speakRoll(p,false);
+  if(steps<0){ phaseRoll=true; phaseEnd=false; return; }   // 取消,未作答,可重新擲
+  if(steps>0){
+    showDie(steps);
+    log(`${p.name} 答對,前進 <b>${steps}</b> 步`);
+    await move(p,steps);
+    await afterLand(steps);
+  } else {
+    log(`${p.name} 未答對,原地不動`);
+  }
+  phaseRoll=false; phaseEnd=true;
+}
+async function jailTurn(){
+  const p=players[cur];
+  if(p.getOut>0){
+    const c=await dialog(`<h3>🔒 ${p.name} 在監獄(第 ${p.jailTurns+1} 回合)</h3>
+      <p>你持有出獄許可證,可直接使用;或挑戰口說題,答對即出獄並前進。</p>`,
+      [{label:'用出獄許可證',value:'card',class:'primary'},{label:'挑戰口說題',value:'quiz'}]);
+    if(c==='card'){ p.getOut--; p.inJail=false; p.jailTurns=0; log(`${p.name} 使用出獄許可證`); await speakMove(); return; }
+  }
+  const steps=await speakRoll(p,true);
+  if(steps<0){ phaseRoll=true; phaseEnd=false; return; }   // 取消,不算一回合,可重試
+  if(steps>0){
+    p.inJail=false; p.jailTurns=0;
+    showDie(steps);
+    log(`${p.name} 答對出獄,前進 <b>${steps}</b> 步`);
+    await move(p,steps);
+    await afterLand(steps);
+  } else {
+    p.jailTurns++;
+    if(p.jailTurns>=3){ p.inJail=false; p.jailTurns=0; log(`${p.name} 已關滿三回合,自動釋放(本回合不前進)`); }
+    else log(`${p.name} 未答對,留在監獄`);
+  }
+  phaseRoll=false; phaseEnd=true;
+}
+async function move(p,steps){
+  for(let i=0;i<steps;i++){
+    p.pos=(p.pos+1)%40;
+    if(p.pos===0) giveGo(p);
+    renderTokens(); await sleep(110);
+  }
+}
+async function moveToPos(p,target){
+  let guard=0;
+  while(p.pos!==target && guard<40){
+    p.pos=(p.pos+1)%40; guard++;
+    if(p.pos===0) giveGo(p);
+    renderTokens(); await sleep(110);
+  }
+}
+function giveGo(p){ p.money+=200; log(`${p.name} 經過起點,領 $200`); renderPlayers(); }
+function goToJail(p){ p.pos=10; p.inJail=true; p.jailTurns=0; renderTokens(); log(`👮 ${p.name} 入獄!`); updateAll(); }
+
+/* ============ 落地處理 ============ */
+async function afterLand(diceTotal){
+  if(gameOver) return;
+  const p=players[cur], sq=BOARD[p.pos];
+  log(`${p.name} 抵達 <b>${sq.name}</b>`);
+  if(sq.t==='prop'||sq.t==='rail'||sq.t==='util'){
+    if(sq.owner==null) await offerBuy(sq);
+    else if(sq.owner!==cur && !sq.mortgaged) await payRent(sq,diceTotal);
+  } else if(sq.t==='tax'){ log(`繳納 ${sq.name} $${sq.amount}`); await settleDebt(p,sq.amount,null); }
+  else if(sq.t==='gotojail') goToJail(p);
+  else if(sq.t==='chance') await drawCard('chance');
+  else if(sq.t==='chest') await drawCard('chest');
+  updateAll();
+}
+function calcRent(sq,diceTotal){
+  if(sq.mortgaged||sq.owner==null) return 0;
+  if(sq.t==='prop'){
+    if(sq.houses>0) return sq.rent[sq.houses];
+    let base=sq.rent[0];
+    if(ownsFullGroup(sq.owner,sq.color)) base*=2;
+    return base;
+  }
+  if(sq.t==='rail'){ const c=BOARD.filter(s=>s.t==='rail'&&s.owner===sq.owner).length; return 25*Math.pow(2,c-1); }
+  if(sq.t==='util'){ const c=BOARD.filter(s=>s.t==='util'&&s.owner===sq.owner).length; return diceTotal*(c===2?10:4); }
+  return 0;
+}
+function ownsFullGroup(pi,color){ return BOARD.filter(s=>s.t==='prop'&&s.color===color).every(s=>s.owner===pi); }
+function groupSquares(s){ return BOARD.filter(x=>x.t==='prop'&&x.color===s.color); }
+
+async function offerBuy(sq){
+  const p=players[cur];
+  if(p.money>=sq.price){
+    const c=await dialog(`<h3>🏠 ${sq.name}</h3><p>價格:<b>$${sq.price}</b></p><p>是否購買?不買則進入拍賣。</p>`,
+      [{label:`購買 $${sq.price}`,value:'buy',class:'primary'},{label:'不買,拍賣',value:'no'}]);
+    if(c==='buy'){ p.money-=sq.price; sq.owner=cur; log(`${p.name} 買下 ${sq.name}`); updateAll(); return; }
+  } else {
+    await dialog(`<h3>🏠 ${sq.name}</h3><p>價格 $${sq.price},你的現金不足,直接進入拍賣。</p>`,[{label:'進入拍賣',value:'no'}]);
+  }
+  await auction(sq);
+}
+async function auction(sq){
+  log(`🔨 ${sq.name} 進入拍賣`);
+  let bid=0, winner=null;
+  const out=players.map(p=>p.bankrupt);
+  if(out.every(o=>o)) return;
+  let idx=cur-1;
+  while(true){
+    const active=out.filter(x=>!x).length;
+    if(active===0) break;
+    if(winner!=null && active===1 && !out[winner]) break;
+    do{ idx=(idx+1)%players.length; } while(out[idx]||idx===winner);
+    const p=players[idx], minBid=bid+10;
+    if(p.money<minBid){ out[idx]=true; log(`${p.name} 現金不足,自動放棄`); continue; }
+    const opts=[{label:`出價 $${minBid}`,value:minBid,class:'primary'}];
+    if(minBid+40<=p.money) opts.push({label:`出價 $${minBid+40}`,value:minBid+40});
+    opts.push({label:'放棄',value:'pass'});
+    const c=await dialog(`<h3>🔨 拍賣:${sq.name}</h3>
+      <p>目前最高:<b>$${bid}</b>${winner!=null?' — '+players[winner].name:''}</p>
+      <p>輪到 <b>${p.name}</b>(現金 $${p.money})</p>`,opts);
+    if(c==='pass') out[idx]=true; else { bid=c; winner=idx; }
+  }
+  if(winner!=null){ players[winner].money-=bid; sq.owner=winner; log(`✅ ${players[winner].name} 以 $${bid} 標得 ${sq.name}`); }
+  else log(`${sq.name} 流標,仍歸銀行`);
+  updateAll();
+}
+async function payRent(sq,diceTotal){
+  const p=players[cur], owner=players[sq.owner];
+  const rent=calcRent(sq,diceTotal);
+  log(`${p.name} 須付 ${owner.name} 租金 $${rent}`);
+  await settleDebt(p,rent,owner);
+}
+
+/* ============ 卡片效果 ============ */
+async function drawCard(type){
+  const deck=type==='chance'?chanceDeck:chestDeck;
+  const src=type==='chance'?CHANCE:CHEST;
+  if(deck.length===0) deck.push(...shuffle([...Array(src.length).keys()]));
+  const card=src[deck.shift()];
+  await dialog(`<h3>${type==='chance'?'❓ 機會':'🎁 命運'}</h3><p style="font-size:17px">${card.text}</p>`,[{label:'確定',value:0}]);
+  log(`${type==='chance'?'機會':'命運'}:${card.text}`);
+  await applyCard(card);
+}
+async function applyCard(c){
+  const p=players[cur];
+  if('money' in c){ if(c.money>=0){ p.money+=c.money; renderPlayers(); } else await settleDebt(p,-c.money,null); return; }
+  if('moveTo' in c){ await moveToPos(p,c.moveTo); await afterLand(0); return; }
+  if('move' in c){ p.pos=((p.pos+c.move)%40+40)%40; renderTokens(); await sleep(180); await afterLand(0); return; }
+  if('jail' in c){ goToJail(p); return; }
+  if('getOut' in c){ p.getOut++; renderPlayers(); return; }
+  if('perHouse' in c){
+    let h=0,ho=0;
+    BOARD.forEach(s=>{ if(s.owner===cur && s.t==='prop'){ if(s.houses>=5) ho++; else h+=s.houses; } });
+    const amt=h*c.perHouse[0]+ho*c.perHouse[1];
+    log(`房屋維修費共 $${amt}`); if(amt>0) await settleDebt(p,amt,null); return;
+  }
+  if('eachPay' in c){ for(let i=0;i<players.length;i++){ if(i!==cur && !players[i].bankrupt){ await settleDebt(p,c.eachPay,players[i]); if(p.bankrupt) break; } } return; }
+  if('eachCollect' in c){ for(let i=0;i<players.length;i++){ if(i!==cur && !players[i].bankrupt) await settleDebt(players[i],c.eachCollect,p); } return; }
+  if('nearestRail' in c){
+    let t=p.pos; do{ t=(t+1)%40; }while(BOARD[t].t!=='rail');
+    await moveToPos(p,t); const sq=BOARD[t];
+    if(sq.owner==null) await offerBuy(sq);
+    else if(sq.owner!==cur && !sq.mortgaged){ const r=calcRent(sq,0)*2; log(`付雙倍車站租金 $${r}`); await settleDebt(p,r,players[sq.owner]); }
+    return;
+  }
+  if('nearestUtil' in c){
+    let t=p.pos; do{ t=(t+1)%40; }while(BOARD[t].t!=='util');
+    await moveToPos(p,t); const sq=BOARD[t];
+    if(sq.owner==null) await offerBuy(sq);
+    else if(sq.owner!==cur && !sq.mortgaged){ const r=(rnd()+rnd())*10; log(`付水電費 $${r}`); await settleDebt(p,r,players[sq.owner]); }
+    return;
+  }
+}
+
+/* ============ 金錢/破產 ============ */
+async function settleDebt(debtor,amount,creditor){
+  if(debtor.money>=amount){ debtor.money-=amount; if(creditor) creditor.money+=amount; updateAll(); return true; }
+  await dialog(`<h3>💸 現金不足</h3><p>${debtor.name} 需支付 <b>$${amount}</b>,但現金只有 $${debtor.money}。<br>請抵押地產或變賣房屋來籌錢。</p>`,[{label:'管理資產',value:0}]);
+  const r=await manageAssets(debtor,amount);
+  if(r!=='bankrupt' && debtor.money>=amount){ debtor.money-=amount; if(creditor) creditor.money+=amount; updateAll(); return true; }
+  await bankruptcy(debtor,creditor); return false;
+}
+async function bankruptcy(debtor,creditor){
+  const di=players.indexOf(debtor);
+  log(`💀 <b>${debtor.name}</b> 宣告破產!`);
+  BOARD.forEach(s=>{ if(s.owner===di && s.t==='prop'){ if(s.houses>=5) hotelBank++; else houseBank+=s.houses; s.houses=0; } });
+  if(creditor){
+    creditor.money+=Math.max(0,debtor.money); creditor.getOut+=debtor.getOut;
+    BOARD.forEach(s=>{ if(s.owner===di) s.owner=players.indexOf(creditor); });
+    log(`${debtor.name} 的資產全數移交 ${creditor.name}`);
+  } else {
+    BOARD.forEach(s=>{ if(s.owner===di){ s.owner=null; s.mortgaged=false; } });
+    log(`${debtor.name} 的地產收歸銀行`);
+  }
+  debtor.money=0; debtor.getOut=0; debtor.bankrupt=true;
+  updateAll(); checkWin();
+}
+function checkWin(){
+  const alive=players.filter(p=>!p.bankrupt);
+  if(alive.length<=1){
+    gameOver=true; const w=alive[0];
+    log(`🏆 遊戲結束!${w?w.name+' 獲勝!':''}`);
+    refreshButtons();
+    dialog(`<h3>🏆 遊戲結束</h3><p>${w?'<b>'+w.name+'</b> 成為最後的大富翁,獲勝!':'平手'}</p>`,
+      [{label:'再玩一局',value:0,class:'primary'}]).then(()=>location.reload());
+  }
+}
+
+/* ============ 資產管理(蓋房/抵押) ============ */
+function canBuild(s){
+  if(s.t!=='prop'||s.owner==null||s.houses>=5) return false;
+  const g=groupSquares(s);
+  if(!g.every(x=>x.owner===s.owner)) return false;
+  if(g.some(x=>x.mortgaged)) return false;
+  if(s.houses!==Math.min(...g.map(x=>x.houses))) return false;
+  if(s.houses<4 && houseBank<1) return false;
+  if(s.houses===4 && hotelBank<1) return false;
+  if(players[s.owner].money<s.house) return false;
+  return true;
+}
+function canSell(s){
+  if(s.t!=='prop'||s.houses<=0) return false;
+  const g=groupSquares(s);
+  return s.houses===Math.max(...g.map(x=>x.houses));
+}
+function canMortgage(s){
+  if(s.mortgaged) return false;
+  if(s.t==='prop'){ if(groupSquares(s).some(x=>x.houses>0)) return false; }
+  return true;
+}
+function assetAction(s,act){
+  const owner=players[s.owner];
+  if(act==='build'&&canBuild(s)){
+    owner.money-=s.house;
+    if(s.houses<4) houseBank--; else { hotelBank--; houseBank+=4; }
+    s.houses++;
+    log(`${owner.name} 在 ${s.name} ${s.houses>=5?'蓋了旅館':'蓋了第'+s.houses+'棟房子'}`);
+  } else if(act==='sell'&&canSell(s)){
+    owner.money+=s.house/2;
+    if(s.houses>=5){ hotelBank++; houseBank=Math.max(0,houseBank-4); s.houses=4; }
+    else { houseBank++; s.houses--; }
+    log(`${owner.name} 賣掉 ${s.name} 的建築,得 $${s.house/2}`);
+  } else if(act==='mort'&&canMortgage(s)){
+    s.mortgaged=true; owner.money+=Math.floor(s.price/2);
+    log(`${owner.name} 抵押 ${s.name},得 $${Math.floor(s.price/2)}`);
+  } else if(act==='unmort'&&s.mortgaged){
+    const cost=Math.ceil(s.price*0.55);
+    if(owner.money>=cost){ owner.money-=cost; s.mortgaged=false; log(`${owner.name} 贖回 ${s.name},付 $${cost}`); }
+  }
+  updateAll();
+}
+function manageAssets(p,needed=0){
+  const pi=players.indexOf(p);
+  return new Promise(resolve=>{
+    const ov=document.getElementById('overlay'), box=document.getElementById('dialog');
+    function render(){
+      const props=BOARD.map((s,i)=>({s,i})).filter(o=>o.s.owner===pi);
+      let h=`<h3>🏦 ${p.name} 的資產</h3><p>現金:<b>$${p.money}</b>${needed?` / 需湊到 <b>$${needed}</b>`:''}　🏠庫存 ${houseBank}　🏨庫存 ${hotelBank}</p>`;
+      h+='<div class="asset-list">';
+      if(props.length===0) h+='<p>(沒有任何地產)</p>';
+      props.forEach(o=>{
+        const s=o.s;
+        h+=`<div class="asset-row"><span class="swatch" style="background:${s.t==='prop'?COLORS[s.color]:'#888'}"></span><b>${s.name}</b>`;
+        if(s.mortgaged) h+=' <i>(已抵押)</i>';
+        if(s.t==='prop'&&s.houses>0) h+=' '+(s.houses>=5?'🏨':'🏠'.repeat(s.houses));
+        h+='<span class="asset-actions">';
+        if(canBuild(s)) h+=`<button class="mini" data-i="${o.i}" data-a="build">蓋 +建築 $${s.house}</button>`;
+        if(canSell(s)) h+=`<button class="mini" data-i="${o.i}" data-a="sell">賣建築 +$${s.house/2}</button>`;
+        if(canMortgage(s)) h+=`<button class="mini" data-i="${o.i}" data-a="mort">抵押 +$${Math.floor(s.price/2)}</button>`;
+        if(s.mortgaged) h+=`<button class="mini" data-i="${o.i}" data-a="unmort" ${p.money<Math.ceil(s.price*0.55)?'disabled':''}>贖回 -$${Math.ceil(s.price*0.55)}</button>`;
+        h+='</span></div>';
+      });
+      h+='</div><div class="dlg-btns">';
+      const enough=!needed||p.money>=needed;
+      h+=`<button class="btn primary" id="mg-done" ${needed&&!enough?'disabled':''}>${needed?'已湊足,付款':'完成'}</button>`;
+      if(needed) h+=`<button class="btn danger" id="mg-bank">宣告破產</button>`;
+      h+='</div>';
+      box.innerHTML=h;
+      box.querySelectorAll('button.mini').forEach(b=>{
+        b.onclick=()=>{ assetAction(BOARD[+b.dataset.i],b.dataset.a); render(); };
+      });
+      box.querySelector('#mg-done').onclick=()=>{ ov.style.display='none'; resolve('done'); };
+      const bk=box.querySelector('#mg-bank'); if(bk) bk.onclick=()=>{ ov.style.display='none'; resolve('bankrupt'); };
+      ov.style.display='flex';
+    }
+    render();
+  });
+}
+async function openManage(){
+  if(busy||gameOver) return;
+  busy=true; refreshButtons();
+  await manageAssets(players[cur],0);
+  busy=false; refreshButtons();
+}
+
+/* ============ 交易 ============ */
+async function tradeUI(){
+  if(busy||gameOver) return;
+  const me=cur;
+  const others=players.map((p,i)=>i).filter(i=>i!==me && !players[i].bankrupt);
+  if(others.length===0){ await dialog('<h3>目前沒有可交易的對象</h3>',[{label:'關閉',value:0}]); return; }
+  const partner=await dialog('<h3>🤝 選擇交易對象</h3>',
+    others.map(i=>({label:players[i].name,value:i})).concat([{label:'取消',value:-1}]));
+  if(partner===-1||partner==null) return;
+  busy=true; refreshButtons();
+  await new Promise(resolve=>{
+    const ov=document.getElementById('overlay'), box=document.getElementById('dialog');
+    const give=new Set(), get=new Set();
+    const tradable=owner=>BOARD.map((s,i)=>({s,i})).filter(o=>o.s.owner===owner && !(o.s.t==='prop'&&o.s.houses>0));
+    function render(){
+      let h=`<h3>🤝 ${players[me].name} ⇄ ${players[partner].name}</h3>
+        <p style="font-size:12px;color:#acc">提示:有蓋房子的地產需先拆除才能交易。</p><div class="trade-cols">`;
+      h+=`<div><b>${players[me].name} 提供</b>`;
+      tradable(me).forEach(o=>{ h+=`<label><input type="checkbox" data-s="g" data-i="${o.i}" ${give.has(o.i)?'checked':''}> ${o.s.name}${o.s.mortgaged?'(抵押)':''}</label>`; });
+      h+=`<div style="margin-top:6px">現金 $<input type="number" id="gm" value="0" min="0" max="${players[me].money}" style="width:78px"></div></div>`;
+      h+=`<div><b>${players[partner].name} 提供</b>`;
+      tradable(partner).forEach(o=>{ h+=`<label><input type="checkbox" data-s="t" data-i="${o.i}" ${get.has(o.i)?'checked':''}> ${o.s.name}${o.s.mortgaged?'(抵押)':''}</label>`; });
+      h+=`<div style="margin-top:6px">現金 $<input type="number" id="tm" value="0" min="0" max="${players[partner].money}" style="width:78px"></div></div>`;
+      h+='</div><div class="dlg-btns"><button class="btn primary" id="t-do">成交</button><button class="btn" id="t-x">取消</button></div>';
+      box.innerHTML=h;
+      box.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+        cb.onchange=()=>{ const set=cb.dataset.s==='g'?give:get; const i=+cb.dataset.i; cb.checked?set.add(i):set.delete(i); };
+      });
+      box.querySelector('#t-x').onclick=()=>{ ov.style.display='none'; resolve(); };
+      box.querySelector('#t-do').onclick=()=>{
+        const gm=Math.max(0,+box.querySelector('#gm').value||0);
+        const tm=Math.max(0,+box.querySelector('#tm').value||0);
+        if(gm>players[me].money||tm>players[partner].money){ toast('現金不足,無法成交'); return; }
+        if(give.size===0&&get.size===0&&gm===0&&tm===0){ toast('交易內容是空的'); return; }
+        give.forEach(i=>BOARD[i].owner=partner);
+        get.forEach(i=>BOARD[i].owner=me);
+        players[me].money+=tm-gm; players[partner].money+=gm-tm;
+        log(`🤝 ${players[me].name} 與 ${players[partner].name} 完成交易`);
+        ov.style.display='none'; updateAll(); resolve();
+      };
+      ov.style.display='flex';
+    }
+    render();
+  });
+  busy=false; refreshButtons();
+}
+</script>
+</body>
+</html>
