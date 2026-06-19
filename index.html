@@ -275,7 +275,8 @@ const rnd=()=>Math.floor(Math.random()*6)+1;
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 /* ============ 口說擲骰:設定與 AI/語音 ============ */
-const QUIZ_BASE="https://spring-art-db47.twlin628.workers.dev";
+//const QUIZ_BASE="https://spring-art-db47.twlin628.workers.dev";
+const QUIZ_BASE="https://morning-river-18bc.twlin628.workers.dev";
 const QUIZ_MODEL="gemma4:e4b";
 const LEVELS=["國小","國中","高中","大學","GRE","口語"];
 let quizLevel="高中";
@@ -294,7 +295,8 @@ function escapeHtml(s){
 async function callAI(prompt){
   const res=await fetch(QUIZ_BASE+"/api/chat/completions",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:QUIZ_MODEL,messages:[{role:"user",content:prompt}],stream:false}),
+	body:JSON.stringify({messages:[{role:"user",content:prompt}],stream:false}),
+    //body:JSON.stringify({model:QUIZ_MODEL,messages:[{role:"user",content:prompt}],stream:false}),
   });
   if(!res.ok){ const t=await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0,80)}`); }
   const data=await res.json();
@@ -466,7 +468,7 @@ function beginGame(){
   players=[];
   for(let i=0;i<setupCount;i++){
     const nm=(document.getElementById('pname'+i).value||('玩家'+(i+1))).trim();
-    players.push({name:nm,color:TOKEN_COLORS[i],money:1500,pos:0,inJail:false,jailTurns:0,getOut:0,bankrupt:false});
+    players.push({name:nm,color:TOKEN_COLORS[i],money:15000,pos:0,inJail:false,jailTurns:0,getOut:0,bankrupt:false});
   }
   BOARD.forEach(s=>{ if(s.t==='prop'||s.t==='rail'||s.t==='util'){ s.owner=null; s.houses=0; s.mortgaged=false; } });
   houseBank=32; hotelBank=12; cur=0; gameOver=false;
@@ -474,7 +476,7 @@ function beginGame(){
   chestDeck=shuffle([...Array(CHEST.length).keys()]);
   document.getElementById('setup').style.display='none';
   buildBoard(); updateAll();
-  log('🎮 遊戲開始!每位玩家擁有 $1500。');
+  log('🎮 遊戲開始!每位玩家擁有 $15000。');
   startTurn();
 }
 
