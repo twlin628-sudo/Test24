@@ -281,6 +281,9 @@ const QUIZ_MODEL="gemma4:e4b";
 const LEVELS=["國小","國中","高中","大學","GRE","口語"];
 let quizLevel="高中";
 let activeRec=null;
+// 在全域宣告一個黑名單陣列
+let historyWords = [];
+
 //const LEVEL_VOCAB={
 //  "國小":"約500字（教育部基本1200字前段），如 library, weather, careful, harvest, polite",
 //  "國中":"約1200字（教育部基本1200字），如 encourage, consider, qualify, symptom, negotiate",
@@ -344,19 +347,26 @@ function recognizeOnce(lang){
 //]
 //陣列必須剛好 6 個元素。`;
 //}
-function buildGenPrompt(lv){
+function buildGenPrompt(lv, excludeWords = []) {
   const seed = Math.floor(Math.random() * 99991) + 10;
+  
+  // 如果黑名單有字就用逗號隔開，沒有就寫「無」
+  const blackListString = excludeWords.length > 0 ? excludeWords.join(', ') : '無';
+
   return `你是英文單字老師。請依據指定等級，產生「6 個完全不同、不重複」的英文單字。
 
 【等級】${lv}
-【量化與詞彙庫參考】${LEVEL_VOCAB[lv]}
+【詞彙庫參考】${LEVEL_VOCAB[lv]}
+
+【絕對排除黑名單（核心任務）】
+以下單字在之前的回合已經出現過，為了確保遊戲趣味性，請「絕對禁止」再次產生這些字：
+>>> ${blackListString} <<<
 
 【強制隨機偏移規則】
-請將隨機種子【 ${seed} 】視為你的檢索偏移量（Offset）。請在你的大腦詞彙庫中，跳過前 (種子 % 50) 個你最先想到的最直覺單字，從中後段的字池中隨機挑選。
+請將隨機種子【 ${seed} 】視為你的檢索偏移量（Offset）。請在你的大腦詞彙庫中，跳過前 (種子 % 40) 個最先想到的直覺單字，從中後段的字池中隨機挑選。
 
-【嚴格限制（黑名單）】
-1. 絕對禁止出現該等級中最無聊、最直覺的超高頻基礎字！
-   - 例如【國小】等級絕對「不可」出現：happy, sad, apple, banana, dog, cat, boy, big, good, thank 等幼兒園程度字詞。請挑選該等級中稍微有難度的字（如：世紀、溫暖、誠實、普通的）。
+【嚴格限制】
+1. 絕對禁止出現該等級中最無聊、最直覺的超高頻基礎字（如國小的 happy, apple, dog 等）。
 2. 這 6 個單字必須涵蓋不同的詞性（例如：2個動詞、2個形容詞、2個名詞），以確保多樣性。
 
 請嚴格只輸出以下 JSON 陣列，不可有任何其他文字或說明：
@@ -365,6 +375,7 @@ function buildGenPrompt(lv){
 ]
 陣列必須剛好 6 個元素。`;
 }
+
 async function judgeWord(target,enText,zhText){
   const prompt=`使用者正在玩英文單字口說遊戲。目標單字是「${target.word}」(中文意思:${target.zh_meaning||""})。
 規則:使用者要先念該英文單字、再念它的中文翻譯,兩者都正確才算答對。
@@ -408,10 +419,32 @@ function speakRoll(player,inJail){
     async function genAndPick(){
       box.innerHTML=`<h3>🗣 出題中…</h3><p>AI 正在產生 6 個單字,請稍候。</p>`;
       try{
-        const arr=parseArray(await callAI(buildGenPrompt(quizLevel)));
-        words=(arr||[]).slice(0,6).filter(w=>w&&w.word);
-        if(words.length<6) throw new Error("單字數量不足,請重試");
-        renderPick();
+        //const arr=parseArray(await callAI(buildGenPrompt(quizLevel)));
+        //words=(arr||[]).slice(0,6).filter(w=>w&&w.word);
+        //if(words.length<6) throw new Error("單字數量不足,請重試");
+        //renderPick();
+		// 💡 修正 1：將 historyWords 傳入提示詞產生器中
+		const prompt = buildGenPrompt(quizLevel, historyWords);
+		const arr = parseArray(await callAI(prompt));
+    
+		words = (arr || []).slice(0, 6).filter(w => w && w.word);
+		if(words.length < 6) throw new Error("單字數量不足,請重試");
+    
+		// 💡 修正 2：成功拿到 6 個字後，把它們塞進歷史黑名單
+		words.forEach(w => {
+		  const lowerWord = w.word.trim().toLowerCase();
+		  // 確保不重複塞入
+		  if (!historyWords.includes(lowerWord)) {
+		    historyWords.push(lowerWord);
+		  }
+		});
+
+		// 💡 修正 3：防止黑名單無限長大，維持在最近的 100 個字就好
+		if (historyWords.length > 100) {
+		  historyWords = historyWords.slice(-100);
+		}
+
+		renderPick();
       }catch(e){
         box.innerHTML=`<h3>⚠ 出題失敗</h3><p>${escapeHtml(e.message||'請再試一次')}</p>
           <div class="dlg-btns"><button class="btn primary" id="q-retry">重試</button><button class="btn" id="q-giveup">放棄本回合</button></div>`;
