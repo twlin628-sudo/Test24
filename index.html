@@ -281,13 +281,21 @@ const QUIZ_MODEL="gemma4:e4b";
 const LEVELS=["國小","國中","高中","大學","GRE","口語"];
 let quizLevel="高中";
 let activeRec=null;
-const LEVEL_VOCAB={
-  "國小":"約500字（教育部基本1200字前段），如 library, weather, careful, harvest, polite",
-  "國中":"約1200字（教育部基本1200字），如 encourage, consider, qualify, symptom, negotiate",
-  "高中":"約7000字（大考中心高中英文參考詞彙表），如 ambiguous, inevitable, perceive, meticulous, lucid",
-  "大學":"CEFR B2-C1 / 學術詞彙AWL，如 paradigm, articulate, inherent, juxtapose, exacerbate",
-  "GRE":"C1-C2 低頻難詞，如 ambivalent, loquacious, recalcitrant, tendentious, abstruse",
-  "口語":"常用口語表達/片語動詞，如 hang out, figure out, on the fence, bite the bullet",
+//const LEVEL_VOCAB={
+//  "國小":"約500字（教育部基本1200字前段），如 library, weather, careful, harvest, polite",
+//  "國中":"約1200字（教育部基本1200字），如 encourage, consider, qualify, symptom, negotiate",
+//  "高中":"約7000字（大考中心高中英文參考詞彙表），如 ambiguous, inevitable, perceive, meticulous, lucid",
+//  "大學":"CEFR B2-C1 / 學術詞彙AWL，如 paradigm, articulate, inherent, juxtapose, exacerbate",
+//  "GRE":"C1-C2 低頻難詞，如 ambivalent, loquacious, recalcitrant, tendentious, abstruse",
+//  "口語":"常用口語表達/片語動詞，如 hang out, figure out, on the fence, bite the bullet",
+//};
+const LEVEL_VOCAB = {
+  "國小": "CEFR A1-A2 級別（教育部基本 1200 字中後段）。聚焦生活實用但非最基礎的詞。範例：library, weather, careful, harvest, polite",
+  "國中": "CEFR B1 級別（教育部基本 1200-2000 字）。涵蓋基礎抽象概念與多音節動詞。範例：encourage, consider, qualify, symptom, negotiate",
+  "高中": "CEFR B2 級別（大考中心 2000-7000 字中後段）。著重學測與指考核心閱讀詞彙。範例：ambiguous, inevitable, perceive, meticulous, lucid",
+  "大學": "CEFR B2-C1 級別 / 學術詞彙表 (AWL)。多用於學術論文、正式簡報。範例：paradigm, articulate, inherent, juxtapose, exacerbate",
+  "GRE": "CEFR C1-C2 級別。極低頻、文學或高階學術思辨難詞。範例：ambivalent, loquacious, recalcitrant, tendentious, abstruse",
+  "口語": "現代英美日常常用片語動詞、慣用語或道地俚語。範例：hang out, figure out, on the fence, bite the bullet",
 };
 function escapeHtml(s){
   return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -322,15 +330,36 @@ function recognizeOnce(lang){
     try{ rec.start(); }catch(err){ activeRec=null; reject(new Error("無法啟動麥克風:"+err.message)); }
   });
 }
+//function buildGenPrompt(lv){
+//  const seed=Math.floor(Math.random()*99991)+10;
+//  return `你是英文單字老師。請依等級產生「6 個不同」的英文單字,難度需符合該等級,並涵蓋不同難度(避免全是最高頻字)。
+//
+//【等級】${lv}
+//【詞彙庫參考】${LEVEL_VOCAB[lv]}
+//【隨機種子】${seed}(用此數字增加選字隨機性,每次結果應不同,6 個字彼此不可重複)
+//
+//請嚴格只輸出以下 JSON 陣列,不可有任何其他文字或說明:
+//[
+//  { "word": "英文單字", "phonetic": "KK音標", "pos": "詞性", "zh_meaning": "中文意思(2-6字)" }
+//]
+//陣列必須剛好 6 個元素。`;
+//}
 function buildGenPrompt(lv){
-  const seed=Math.floor(Math.random()*99991)+10;
-  return `你是英文單字老師。請依等級產生「6 個不同」的英文單字,難度需符合該等級,並涵蓋不同難度(避免全是最高頻字)。
+  const seed = Math.floor(Math.random() * 99991) + 10;
+  return `你是英文單字老師。請依據指定等級，產生「6 個完全不同、不重複」的英文單字。
 
 【等級】${lv}
-【詞彙庫參考】${LEVEL_VOCAB[lv]}
-【隨機種子】${seed}(用此數字增加選字隨機性,每次結果應不同,6 個字彼此不可重複)
+【量化與詞彙庫參考】${LEVEL_VOCAB[lv]}
 
-請嚴格只輸出以下 JSON 陣列,不可有任何其他文字或說明:
+【強制隨機偏移規則】
+請將隨機種子【 ${seed} 】視為你的檢索偏移量（Offset）。請在你的大腦詞彙庫中，跳過前 (種子 % 50) 個你最先想到的最直覺單字，從中後段的字池中隨機挑選。
+
+【嚴格限制（黑名單）】
+1. 絕對禁止出現該等級中最無聊、最直覺的超高頻基礎字！
+   - 例如【國小】等級絕對「不可」出現：happy, sad, apple, banana, dog, cat, boy, big, good, thank 等幼兒園程度字詞。請挑選該等級中稍微有難度的字（如：世紀、溫暖、誠實、普通的）。
+2. 這 6 個單字必須涵蓋不同的詞性（例如：2個動詞、2個形容詞、2個名詞），以確保多樣性。
+
+請嚴格只輸出以下 JSON 陣列，不可有任何其他文字或說明：
 [
   { "word": "英文單字", "phonetic": "KK音標", "pos": "詞性", "zh_meaning": "中文意思(2-6字)" }
 ]
