@@ -178,8 +178,12 @@
       <select id="base-sel" style="flex:1"></select>
     </div>
     <button class="btn primary big" style="width:100%;margin-top:14px" onclick="beginGame()">開始遊戲</button>
+    <div id="save-row" style="display:none;margin-top:10px">
+      <button class="btn primary big" style="width:100%" onclick="loadGame()">▶ 繼續上局</button>
+      <button class="btn" style="width:100%;margin-top:8px" onclick="confirmDeleteSave()">🗑 刪除存檔</button>
+    </div>
     <div style="text-align:center;margin-top:14px;font-size:12px;color:#9cc">
-      <span id="ver-tag">v1.3.0</span> ·
+      <span id="ver-tag">v1.4.0</span> ·
       <a href="#" onclick="openCredits(event)" style="color:var(--gold);text-decoration:none">🙏 貢獻者</a>
     </div>
   </div>
@@ -280,6 +284,8 @@ const CHEST=[
 ];
 
 /* ============ 狀態 ============ */
+const SAVE_KEY="wordtycoon_save";   // 單一存檔槽
+const SAVE_SCHEMA=1;                // 存檔結構版本，改棋盤/欄位時要 +1
 const TOKEN_COLORS=['#e6194b','#3cb44b','#4363d8','#f58231'];
 let players=[], cur=0, busy=false, gameOver=false;
 let houseBank=32, hotelBank=12;
@@ -549,6 +555,7 @@ document.getElementById('count-row').addEventListener('click',e=>{
 });
 renderSetupInputs();
 initBaseSel();
+refreshSaveUI();   // 有存檔時顯示「繼續上局/刪除存檔」
 
 function openCredits(e){ if(e) e.preventDefault(); document.getElementById('credits').style.display='flex'; }
 function closeCredits(){ document.getElementById('credits').style.display='none'; }
@@ -569,6 +576,55 @@ function beginGame(){
   document.getElementById('setup').style.display='none';
   buildBoard(); updateAll();
   log('🎮 遊戲開始!每位玩家擁有 $15000。');
+  startTurn();
+}
+
+/* ============ 存檔(單一槽位,可刪除) ============ */
+function buildSaveData(){
+  return {
+    v:SAVE_SCHEMA, cur, gameOver, houseBank, hotelBank, phaseRoll, phaseEnd,
+    quizBaseKey, players, chanceDeck, chestDeck, historyWords,
+    // 只存格子的動態欄位(地名/價格等靜態資料來自程式碼)
+    board:BOARD.map(s=>(s.t==='prop'||s.t==='rail'||s.t==='util')
+      ? {owner:s.owner??null, houses:s.houses||0, mortgaged:!!s.mortgaged} : null),
+  };
+}
+function saveGame(){
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveData())); }
+  catch(e){ /* localStorage 不可用(隱私模式/容量)時靜默略過 */ }
+}
+function readSave(){
+  try{ const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    return (d && d.v===SAVE_SCHEMA && Array.isArray(d.players) && d.players.length) ? d : null;
+  }catch(e){ return null; }
+}
+function hasSave(){ return !!readSave(); }
+function deleteSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} refreshSaveUI(); }
+function refreshSaveUI(){
+  const r=document.getElementById('save-row');
+  if(r) r.style.display=hasSave()?'block':'none';
+}
+function confirmDeleteSave(){
+  if(confirm('確定要刪除存檔嗎?此動作無法復原。')) deleteSave();
+}
+function loadGame(){
+  const d=readSave();
+  if(!d){ alert('找不到有效存檔,可能已損毀或版本不符。'); deleteSave(); return; }
+  // 寫回全域狀態
+  players=d.players; cur=d.cur||0; gameOver=!!d.gameOver; busy=false;
+  houseBank=d.houseBank??32; hotelBank=d.hotelBank??12;
+  phaseRoll=d.phaseRoll!==false; phaseEnd=!!d.phaseEnd;
+  chanceDeck=Array.isArray(d.chanceDeck)?d.chanceDeck:[];
+  chestDeck=Array.isArray(d.chestDeck)?d.chestDeck:[];
+  if(d.quizBaseKey && QUIZ_BASES[d.quizBaseKey]) quizBaseKey=d.quizBaseKey;
+  historyWords=Array.isArray(d.historyWords)?d.historyWords:[];
+  // 重貼 BOARD 動態欄位
+  BOARD.forEach((s,i)=>{ if(s.t==='prop'||s.t==='rail'||s.t==='util'){
+    const c=d.board&&d.board[i]; s.owner=c?(c.owner??null):null; s.houses=c?(c.houses||0):0; s.mortgaged=c?!!c.mortgaged:false;
+  }});
+  document.getElementById('setup').style.display='none';
+  buildBoard(); updateAll();
+  log('📂 已載入存檔,接續遊戲。');
   startTurn();
 }
 
@@ -686,6 +742,7 @@ function startTurn(){
   if(tn){ tn.textContent=p.name; tn.style.color=p.color; }
   log(`—— 輪到 <b style="color:${p.color}">${p.name}</b> ——${p.inJail?'(獄中)':''}`);
   renderPlayers(); refreshButtons();
+  saveGame();   // 每回合開頭自動存檔(安全邊界:此時非進行中)
 }
 function nextTurn(){
   let n=cur, guard=0;
@@ -896,6 +953,7 @@ function checkWin(){
   const alive=players.filter(p=>!p.bankrupt);
   if(alive.length<=1){
     gameOver=true; const w=alive[0];
+    deleteSave();   // 遊戲結束,清除存檔
     log(`🏆 遊戲結束!${w?w.name+' 獲勝!':''}`);
     refreshButtons();
     dialog(`<h3>🏆 遊戲結束</h3><p>${w?'<b>'+w.name+'</b> 成為最後的單字大亨,獲勝!':'平手'}</p>`,
