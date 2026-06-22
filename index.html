@@ -6,9 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="大富翁">
+<meta name="apple-mobile-web-app-title" content="WordTycoon">
 <meta name="theme-color" content="#0b2c22">
-<title>大富翁 · 台灣版</title>
+<title>WordTycoon · 單字大亨</title>
 <style>
   :root{ --bg:#0e3b2e; --panel:#11352a; --gold:#f4c430; }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -115,14 +115,7 @@
   .count-row button.sel{ outline:3px solid var(--gold); }
   .pinput{ display:flex; align-items:center; gap:8px; margin:8px 0; }
   .pinput input{ flex:1; padding:9px; border-radius:7px; border:1px solid #2c6b53; background:#0e2b22; color:#fff; font:inherit; }
-
-  /* ---- 橫放提示(僅直向手機顯示) ---- */
-  #rotate-hint{ display:none; }
-  @media(max-width:760px) and (orientation:portrait){
-    #rotate-hint{ display:block; position:fixed; top:env(safe-area-inset-top); left:0; right:0;
-      text-align:center; font-size:13px; padding:5px; color:#06140f; background:var(--gold);
-      z-index:60; pointer-events:none; opacity:.95; }
-  }
+  .pinput select, #base-sel{ padding:9px 6px; border-radius:7px; border:1px solid #2c6b53; background:#0e2b22; color:#fff; font:inherit; flex:none; }
 
   /* ---- 手機版面 ---- */
   @media(max-width:560px){
@@ -149,8 +142,6 @@
 </head>
 <body>
 
-<div id="rotate-hint">📱 建議橫放手機,畫面更舒適</div>
-
 <div id="app">
   <div id="board"></div>
   <div id="panel">
@@ -172,16 +163,41 @@
 
 <div id="setup">
   <div class="box">
-    <h1>大富翁</h1>
-    <p class="sub">台灣在地版 · 同機多人輪流</p>
+    <h1>WordTycoon</h1>
+    <p class="sub">單字大亨 · 說對單字 · 步步致富</p>
     <div>玩家人數</div>
     <div class="count-row" id="count-row">
       <button class="btn" data-n="2">2 人</button>
       <button class="btn sel" data-n="3">3 人</button>
       <button class="btn" data-n="4">4 人</button>
     </div>
+    <div style="font-size:12px;color:#9cc;margin:6px 0 2px">為每位玩家選擇單字等級(整局固定)</div>
     <div id="pinputs"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 0">
+      <span style="font-size:13px;color:#bdd;flex:none">AI 後端</span>
+      <select id="base-sel" style="flex:1"></select>
+    </div>
     <button class="btn primary big" style="width:100%;margin-top:14px" onclick="beginGame()">開始遊戲</button>
+    <div style="text-align:center;margin-top:14px;font-size:12px;color:#9cc">
+      <span id="ver-tag">v1.3.0</span> ·
+      <a href="#" onclick="openCredits(event)" style="color:var(--gold);text-decoration:none">🙏 貢獻者</a>
+    </div>
+  </div>
+</div>
+
+<div id="credits" style="position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;z-index:90;align-items:center;justify-content:center;padding:14px">
+  <div style="background:var(--panel);border:1px solid #2c6b53;border-radius:16px;padding:26px;width:min(96vw,380px);text-align:center;box-shadow:0 10px 40px #000">
+    <h2 style="color:var(--gold);margin:0 0 4px">🙏 貢獻者</h2>
+    <p style="color:#bdd;margin:0 0 18px;font-size:14px">感謝以下贊助夥伴的支持</p>
+    <div style="background:#0e2a20;border:1px solid #1f5a45;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:18px;font-weight:800;color:var(--gold)">Kevin</div>
+      <div style="font-size:13px;color:#9cc;margin-top:2px">💰 贊助</div>
+    </div>
+    <div style="background:#0e2a20;border:1px solid #1f5a45;border-radius:12px;padding:14px;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:800;color:var(--gold)">Marvin</div>
+      <div style="font-size:13px;color:#9cc;margin-top:2px">💰 贊助</div>
+    </div>
+    <button class="btn primary" style="width:100%" onclick="closeCredits()">關閉</button>
   </div>
 </div>
 
@@ -275,11 +291,15 @@ const rnd=()=>Math.floor(Math.random()*6)+1;
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 /* ============ 口說擲骰:設定與 AI/語音 ============ */
-//const QUIZ_BASE="https://spring-art-db47.twlin628.workers.dev";
-const QUIZ_BASE="https://morning-river-18bc.twlin628.workers.dev";
+// 可切換的後端：新版不需帶 model，原版需要帶 model
+const QUIZ_BASES={
+  "新版":{url:"https://morning-river-18bc.twlin628.workers.dev",needModel:false},
+  "原版":{url:"https://spring-art-db47.twlin628.workers.dev",needModel:true},
+};
+let quizBaseKey="新版";   // 預設使用新版
 const QUIZ_MODEL="gemma4:e4b";
-const LEVELS=["國小","國中","高中","大學","GRE","口語"];
-let quizLevel="高中";
+const LEVELS=["國小","國中","高中","大學","GRE","口語","隨機"];
+let quizLevel="高中";   // 後備預設（玩家未選等級時使用）
 let activeRec=null;
 // 在全域宣告一個黑名單陣列
 let historyWords = [];
@@ -299,15 +319,19 @@ const LEVEL_VOCAB = {
   "大學": "CEFR B2-C1 級別 / 學術詞彙表 (AWL)。多用於學術論文、正式簡報。範例：paradigm, articulate, inherent, juxtapose, exacerbate",
   "GRE": "CEFR C1-C2 級別。極低頻、文學或高階學術思辨難詞。範例：ambivalent, loquacious, recalcitrant, tendentious, abstruse",
   "口語": "現代英美日常常用片語動詞、慣用語或道地俚語。範例：hang out, figure out, on the fence, bite the bullet",
+  "隨機": "不限定等級，從國小、國中、高中、大學、GRE 到口語各種難度自由混合；這 6 個字可橫跨簡單到困難，無須符合單一級別，由你任意挑選。",
 };
 function escapeHtml(s){
   return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-async function callAI(prompt){
-  const res=await fetch(QUIZ_BASE+"/api/chat/completions",{
+async function callAI(prompt,signal){
+  const base=QUIZ_BASES[quizBaseKey];
+  const payload={messages:[{role:"user",content:prompt}],stream:false};
+  if(base.needModel) payload.model=QUIZ_MODEL;   // 原版需要 model，新版不帶
+  const res=await fetch(base.url+"/api/chat/completions",{
     method:"POST",headers:{"Content-Type":"application/json"},
-	body:JSON.stringify({messages:[{role:"user",content:prompt}],stream:false}),
-    //body:JSON.stringify({model:QUIZ_MODEL,messages:[{role:"user",content:prompt}],stream:false}),
+    body:JSON.stringify(payload),
+    signal,   // 傳入 AbortSignal 以支援取消卡住的請求
   });
   if(!res.ok){ const t=await res.text(); throw new Error(`HTTP ${res.status}: ${t.slice(0,80)}`); }
   const data=await res.json();
@@ -321,7 +345,7 @@ function recognizeOnce(lang){
     if(!SR){ reject(new Error("此瀏覽器不支援語音辨識,請改用 Chrome/Edge")); return; }
     const rec=new SR(); rec.lang=lang; rec.interimResults=false; rec.maxAlternatives=1; rec.continuous=false;
     let got="",fatal=null;
-    rec.onresult=e=>{ got=e.results[0][0].transcript||""; };
+    rec.onresult=e=>{ got=e.results[0][0].transcript||""; try{ rec.stop(); }catch(_){} };  // 拿到結果立即收尾，避免麥克風空等靜音逾時不關
     rec.onerror=e=>{
       if(e.error==="no-speech"||e.error==="aborted") return;
       if(e.error==="not-allowed"||e.error==="service-not-allowed") fatal="麥克風權限被拒絕";
@@ -404,28 +428,20 @@ function speakRoll(player,inJail){
     const ov=document.getElementById('overlay'), box=document.getElementById('dialog');
     let words=[], recing=false;
     function close(val){ ov.style.display='none'; resolve(val); }
-    function renderLevel(){
-      let h=`<h3>🗣 ${player.name} ${inJail?'的出獄挑戰':'的口說擲骰'}</h3>
-        <p>選擇單字等級,AI 會出 6 個單字(分別代表前進 1~6 步)。</p>
-        <div class="count-row" style="flex-wrap:wrap;gap:6px">`;
-      LEVELS.forEach(l=>{ h+=`<button class="btn${l===quizLevel?' sel':''}" data-lv="${l}" style="flex:0 0 auto;min-width:62px">${l}</button>`; });
-      h+=`</div><div class="dlg-btns"><button class="btn primary" id="q-gen">出題 →</button><button class="btn" id="q-x">取消</button></div>`;
-      box.innerHTML=h;
-      box.querySelectorAll('button[data-lv]').forEach(b=>b.onclick=()=>{ quizLevel=b.dataset.lv; renderLevel(); });
-      box.querySelector('#q-x').onclick=()=>close(-1);
-      box.querySelector('#q-gen').onclick=genAndPick;
-      ov.style.display='flex';
-    }
     async function genAndPick(){
-      box.innerHTML=`<h3>🗣 出題中…</h3><p>AI 正在產生 6 個單字,請稍候。</p>`;
+      const ac=new AbortController();   // 用來在後端卡住時取消請求
+      box.innerHTML=`<h3>🗣 ${player.name}（${player.level}）${inJail?'的出獄挑戰':'出題中…'}</h3>
+        <p>AI 正在產生 6 個單字,請稍候。</p>
+        <div class="dlg-btns"><button class="btn" id="q-cancel">取消(本回合不擲)</button></div>`;
+      box.querySelector('#q-cancel').onclick=()=>{ ac.abort(); close(-1); };  // 中斷出題並取消本次擲骰(不罰)
       try{
         //const arr=parseArray(await callAI(buildGenPrompt(quizLevel)));
         //words=(arr||[]).slice(0,6).filter(w=>w&&w.word);
         //if(words.length<6) throw new Error("單字數量不足,請重試");
         //renderPick();
-		// 💡 修正 1：將 historyWords 傳入提示詞產生器中
-		const prompt = buildGenPrompt(quizLevel, historyWords);
-		const arr = parseArray(await callAI(prompt));
+		// 💡 修正 1：將該玩家固定等級與 historyWords 傳入提示詞產生器中
+		const prompt = buildGenPrompt(player.level, historyWords);
+		const arr = parseArray(await callAI(prompt, ac.signal));
     
 		words = (arr || []).slice(0, 6).filter(w => w && w.word);
 		if(words.length < 6) throw new Error("單字數量不足,請重試");
@@ -446,14 +462,15 @@ function speakRoll(player,inJail){
 
 		renderPick();
       }catch(e){
+        if(ac.signal.aborted) return;   // 使用者已取消，畫面已退回等級選擇，不顯示錯誤
         box.innerHTML=`<h3>⚠ 出題失敗</h3><p>${escapeHtml(e.message||'請再試一次')}</p>
           <div class="dlg-btns"><button class="btn primary" id="q-retry">重試</button><button class="btn" id="q-giveup">放棄本回合</button></div>`;
-        box.querySelector('#q-retry').onclick=renderLevel;
+        box.querySelector('#q-retry').onclick=genAndPick;
         box.querySelector('#q-giveup').onclick=()=>close(0);
       }
     }
     function renderPick(){
-      let h=`<h3>🗣 ${inJail?'答對即可出獄並前進':'選一題作答'}(等級:${quizLevel})</h3>
+      let h=`<h3>🗣 ${inJail?'答對即可出獄並前進':'選一題作答'}(${player.name}·等級:${player.level})</h3>
         <p style="font-size:13px;color:#acc">點任一題:先念<b>英文</b>、再念<b>中文翻譯</b>。答對前進該步數,答錯${inJail?'留在獄中':'原地不動'}。</p>
         <div class="asset-list">`;
       words.forEach((w,i)=>{
@@ -502,7 +519,8 @@ function speakRoll(player,inJail){
       box.innerHTML=h+`<div class="dlg-btns"><button class="btn primary" id="q-ok">確定</button></div>`;
       box.querySelector('#q-ok').onclick=()=>close(ok?steps:0);
     }
-    renderLevel();
+    ov.style.display='flex';
+    genAndPick();
   });
 }
 
@@ -513,9 +531,14 @@ function renderSetupInputs(){
   for(let i=0;i<setupCount;i++){
     const d=document.createElement('div'); d.className='pinput';
     d.innerHTML=`<span class="dot" style="background:${TOKEN_COLORS[i]}"></span>
-      <input id="pname${i}" maxlength="6" value="玩家${i+1}">`;
+      <input id="pname${i}" maxlength="6" value="玩家${i+1}">
+      <select id="plevel${i}">${LEVELS.map(l=>`<option value="${l}"${l===quizLevel?' selected':''}>${l}</option>`).join('')}</select>`;
     wrap.appendChild(d);
   }
+}
+function initBaseSel(){
+  const sel=document.getElementById('base-sel');
+  if(sel) sel.innerHTML=Object.keys(QUIZ_BASES).map(k=>`<option value="${k}"${k===quizBaseKey?' selected':''}>${k}</option>`).join('');
 }
 document.getElementById('count-row').addEventListener('click',e=>{
   if(e.target.dataset.n){
@@ -525,12 +548,19 @@ document.getElementById('count-row').addEventListener('click',e=>{
   }
 });
 renderSetupInputs();
+initBaseSel();
+
+function openCredits(e){ if(e) e.preventDefault(); document.getElementById('credits').style.display='flex'; }
+function closeCredits(){ document.getElementById('credits').style.display='none'; }
 
 function beginGame(){
   players=[];
+  const bsel=document.getElementById('base-sel');
+  if(bsel&&bsel.value) quizBaseKey=bsel.value;   // 整局共用的 AI 後端，於開始畫面選定
   for(let i=0;i<setupCount;i++){
     const nm=(document.getElementById('pname'+i).value||('玩家'+(i+1))).trim();
-    players.push({name:nm,color:TOKEN_COLORS[i],money:15000,pos:0,inJail:false,jailTurns:0,getOut:0,bankrupt:false});
+    const lv=(document.getElementById('plevel'+i)||{}).value||quizLevel;   // 每位玩家整局固定的等級
+    players.push({name:nm,level:lv,color:TOKEN_COLORS[i],money:15000,pos:0,inJail:false,jailTurns:0,getOut:0,bankrupt:false});
   }
   BOARD.forEach(s=>{ if(s.t==='prop'||s.t==='rail'||s.t==='util'){ s.owner=null; s.houses=0; s.mortgaged=false; } });
   houseBank=32; hotelBank=12; cur=0; gameOver=false;
@@ -558,7 +588,7 @@ function iconOf(s){
 function buildBoard(){
   const b=document.getElementById('board'); b.innerHTML='';
   const c=document.createElement('div'); c.id='center';
-  c.innerHTML='<div class="logo">大富翁<br><small>台灣版</small></div><div id="dice">🎲</div><div class="turn-line">輪到:<span id="turn-name">—</span></div>';
+  c.innerHTML='<div class="logo">WordTycoon<br><small>單字大亨</small></div><div id="dice">🎲</div><div class="turn-line">輪到:<span id="turn-name">—</span></div>';
   b.appendChild(c);
   BOARD.forEach((s,i)=>{
     const g=gridPos(i); const cell=document.createElement('div');
@@ -868,7 +898,7 @@ function checkWin(){
     gameOver=true; const w=alive[0];
     log(`🏆 遊戲結束!${w?w.name+' 獲勝!':''}`);
     refreshButtons();
-    dialog(`<h3>🏆 遊戲結束</h3><p>${w?'<b>'+w.name+'</b> 成為最後的大富翁,獲勝!':'平手'}</p>`,
+    dialog(`<h3>🏆 遊戲結束</h3><p>${w?'<b>'+w.name+'</b> 成為最後的單字大亨,獲勝!':'平手'}</p>`,
       [{label:'再玩一局',value:0,class:'primary'}]).then(()=>location.reload());
   }
 }
